@@ -18,3 +18,4 @@ data class ChangeItem(val affectedPaths: List<String>?, val commitId: String?, v
 data class ChangePath(val editType: String?, val file: String?)
 
 data class Person(val absoluteUrl: String?, val fullName: String?)
+
