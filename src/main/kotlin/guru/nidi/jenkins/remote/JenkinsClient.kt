@@ -36,12 +36,16 @@ class JenkinsClient(val connect: JenkinsConnect) {
 
     fun job(name: String, vararg subs: String): Job {
         val path = (listOf<String>(name) + subs.asList()).joinToString("/job/")
-        return byUrl("job/" + path, Job::class.java)
+        return byUrl("job/$path", Job::class.java)
     }
 
     fun build(build: Int, name: String, vararg subs: String): Build {
         val path = (listOf<String>(name) + subs.asList()).joinToString("/job/")
         return byUrl("job/$path/$build", Build::class.java)
+    }
+
+    fun view(name: String): View {
+        return byUrl("view/$name", View::class.java)
     }
 
     fun <T> byUrl(url: String, type: Class<T>): T {

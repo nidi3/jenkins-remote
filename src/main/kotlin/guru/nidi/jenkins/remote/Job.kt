@@ -26,7 +26,7 @@ data class Job(val actions: List<Any>, val description: String?, val displayName
                val upstreamProjects: List<Any>?, val downstreamProjects: List<Any>?,
                val color: String?, val inQueue: Boolean?, val keepDependencies: Boolean?,
                val healthReport: List<HealthReport>, val jobs: List<JobOverview>?,
-               val primaryView: View?, val views: List<View>?)
+               val primaryView: ViewOverview?, val views: List<ViewOverview>?)
 
 data class HealthReport(val description: String?, val iconClassName: String?,
                         val iconUrl: String?, val score: Int?)
@@ -37,4 +37,8 @@ data class BuildOverview(val number: Int?, val url: String) {
     }
 }
 
-data class Module(val name: String?, val url: String?, val color: String?, val displayName: String?)
+data class Module(val name: String?, val url: String, val color: String?, val displayName: String?) {
+    fun load(client: JenkinsClient): Job {
+        return client.byUrl(url, Job::class.java)
+    }
+}

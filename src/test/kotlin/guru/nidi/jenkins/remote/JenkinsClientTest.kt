@@ -72,10 +72,29 @@ class JenkinsClientTest {
     }
 
     @Test
+    fun view() {
+        val view = apache.view("Beam")
+        assertEquals("Beam", view.name)
+    }
+
+    @Test
+    fun navigateView() {
+        val view = overview.views[0].load(apache)
+        assertNotNull(view.url)
+    }
+
+    @Test
     fun navigateBuild() {
         val job = jenkins.job("Core", "pom")
         val build = job.builds!![0].load(jenkins)
         assertNotNull(build.id)
+    }
+
+    @Test
+    fun navigateModule() {
+        val job = overview.jobs.find{it.name=="Abdera-trunk"}!!.load(apache)
+        val module = job.modules!![0].load(jenkins)
+        assertNotNull(module.name)
     }
 
     @Test

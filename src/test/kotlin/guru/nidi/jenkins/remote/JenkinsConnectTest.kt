@@ -17,6 +17,7 @@ package guru.nidi.jenkins.remote
 
 import org.apache.http.util.EntityUtils
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 import javax.net.ssl.SSLHandshakeException
 
@@ -29,7 +30,8 @@ class JenkinsConnectTest {
         }
     }
 
-//    @Test(expected = JenkinsException::class)
+    @Ignore("different key stores locally and on travis?")
+    @Test(expected = JenkinsException::class)
     fun unknownCertNok() {
         val connect = JenkinsConnect(Server.JENKINS)
         connect.get("") {}
