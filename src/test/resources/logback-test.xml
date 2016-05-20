@@ -5,6 +5,8 @@
         </encoder>
     </appender>
 
+    <logger name="org.apache.http.wire" level="WARN" />
+
     <root level="debug">
         <appender-ref ref="STDOUT" />
     </root>
