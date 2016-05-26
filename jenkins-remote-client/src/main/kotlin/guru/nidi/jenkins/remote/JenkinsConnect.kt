@@ -71,6 +71,10 @@ class JenkinsConnect(server: String, port: Int = 0,
         client.close()
     }
 
+    fun getName(): String {
+        return server.substring(server.indexOf("://") + 3).replace('/', '.')
+    }
+
     fun <T> get(path: String, consumer: (HttpResponse) -> T): T {
         val get = HttpGet(uri(path))
         try {

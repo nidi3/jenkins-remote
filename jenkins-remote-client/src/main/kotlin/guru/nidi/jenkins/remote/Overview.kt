@@ -17,11 +17,11 @@ package guru.nidi.jenkins.remote
 
 data class Overview(val version: String?, val mode: String?,
                     val nodeDescription: String?, val nodeName: String?,
-                    val numExecutors: Int?, val description: String?, val jobs: List<JobOverview>,
+                    val numExecutors: Int?, val description: String?, override val jobs: List<JobOverview>,
                     val primaryView: ViewOverview?, val quietingDown: Boolean?, val slaveAgentPort: Int?,
                     val useCrumbs: Boolean?, val useSecurity: Boolean?, val views: List<ViewOverview>,
         //unknown...
-                    val assignedLabels: List<Any>, val overallLoad: Any?, val unlabeledLoad: Any?)
+                    val assignedLabels: List<Any>, val overallLoad: Any?, val unlabeledLoad: Any?) : JobContainer
 
 data class ViewOverview(val name: String, val url: String) {
     fun load(client: JenkinsClient): View {
@@ -31,7 +31,7 @@ data class ViewOverview(val name: String, val url: String) {
 
 data class JobOverview(val name: String, val url: String, val color: String?) {
     fun load(client: JenkinsClient): Job {
-        return client.job(name)
+        return client.byUrl(url, Job::class.java)
     }
 }
 
