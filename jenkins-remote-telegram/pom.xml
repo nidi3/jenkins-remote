@@ -28,7 +28,7 @@
                                 <transformer
                                     implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>guru.nidi.jenkins.remote.JenkinsBot</Main-Class>
+                                        <Main-Class>guru.nidi.jenkins.remote.JenkinsBotKt</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
