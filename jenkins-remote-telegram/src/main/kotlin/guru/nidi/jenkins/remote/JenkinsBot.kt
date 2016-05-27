@@ -37,6 +37,7 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
     val monitors = mutableMapOf<String, JenkinsMonitor>()
 
     init {
+        dataDir.mkdirs()
         mapper = ObjectMapper().registerModule(KotlinModule())
         mapper.setConfig(mapper.deserializationConfig.without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES))
         state = loadState()
