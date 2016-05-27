@@ -32,7 +32,7 @@ data class Chat(val monitors: MutableMap<String, Boolean>, var running: Boolean)
 
 class JenkinsBot(val username: String, val token: String) : TelegramLongPollingBot() {
     private val mapper: ObjectMapper
-    val dataDir = File(".")
+    val dataDir = File(System.getenv("DATA_DIR") ?: ".")
     val state: BotState
     val monitors = mutableMapOf<String, JenkinsMonitor>()
 

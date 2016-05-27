@@ -11,6 +11,67 @@
 
     <artifactId>jenkins-remote-telegram</artifactId>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer
+                                    implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>guru.nidi.jenkins.remote.JenkinsBot</Main-Class>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                            <outputFile>${project.build.directory}/${project.build.finalName}-fat.jar</outputFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>com.spotify</groupId>
+                    <artifactId>docker-maven-plugin</artifactId>
+                    <version>0.4.5</version>
+                    <configuration>
+                        <imageName>nidi3/jenkins-telegram</imageName>
+                        <imageTags>
+                            <imageTag>${project.version}</imageTag>
+                            <imageTag>latest</imageTag>
+                        </imageTags>
+                        <baseImage>java:openjdk-8u72</baseImage>
+                        <env>
+                            <DATA_DIR>/var/data</DATA_DIR>
+                        </env>
+                        <volumes>
+                            <volume>data:$DATA_DIR</volume>
+                        </volumes>
+                        <entryPoint>["java", "-jar", "/usr/jenkins-telegram/${project.build.finalName}-fat.jar"]</entryPoint>
+                        <serverId>docker-hub</serverId>
+                        <resources>
+                            <resource>
+                                <targetPath>/usr/jenkins-telegram</targetPath>
+                                <directory>${project.build.directory}</directory>
+                                <include>${project.build.finalName}-fat.jar</include>
+                            </resource>
+                        </resources>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
     <dependencies>
         <dependency>
             <groupId>guru.nidi.jenkins</groupId>

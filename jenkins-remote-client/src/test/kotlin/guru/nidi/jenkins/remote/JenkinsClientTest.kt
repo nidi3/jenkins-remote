@@ -99,9 +99,9 @@ class JenkinsClientTest {
 
     @Test
     fun privateTest() {
-        Assume.assumeNotNull(System.getenv("JENKINS_URL"))
-        val client = JenkinsClient(JenkinsConnect(System.getenv("JENKINS_URL"), verifyCertificate = false,
-                username = System.getenv("JENKINS_USER"), apiToken = System.getenv("JENKINS_TOKEN")))
+        Assume.assumeNotNull(System.getenv("MY_JENKINS_URL"))
+        val client = JenkinsClient(JenkinsConnect(System.getenv("MY_JENKINS_URL"), verifyCertificate = false,
+                username = System.getenv("MY_JENKINS_USER"), apiToken = System.getenv("MY_JENKINS_TOKEN")))
         val o = client.overview()
         assertNotNull(o.version)
         val job = o.jobs[0].load(client)

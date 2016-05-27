@@ -36,9 +36,9 @@ class JenkinsMonitorTest {
 
     @Test
     fun privateTest() {
-        Assume.assumeNotNull(System.getenv("JENKINS_URL"))
-        val client = JenkinsClient(JenkinsConnect(System.getenv("JENKINS_URL"), verifyCertificate = false,
-                username = System.getenv("JENKINS_USER"), apiToken = System.getenv("JENKINS_TOKEN")))
+        Assume.assumeNotNull(System.getenv("MY_JENKINS_URL"))
+        val client = JenkinsClient(JenkinsConnect(System.getenv("MY_JENKINS_URL"), verifyCertificate = false,
+                username = System.getenv("MY_JENKINS_USER"), apiToken = System.getenv("MY_JENKINS_TOKEN")))
         val monitor = JenkinsMonitor(client, 100, output.newFolder())
         monitor.start()
         assertFalse(monitor.getState().isEmpty())
