@@ -45,7 +45,7 @@
                     <artifactId>docker-maven-plugin</artifactId>
                     <version>0.4.5</version>
                     <configuration>
-                        <imageName>nidi3/jenkins-telegram</imageName>
+                        <imageName>schaltstelle/jenkins-telegram</imageName>
                         <imageTags>
                             <imageTag>${project.version}</imageTag>
                             <imageTag>latest</imageTag>
