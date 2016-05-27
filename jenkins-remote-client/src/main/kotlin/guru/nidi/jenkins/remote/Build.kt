@@ -15,9 +15,9 @@
  */
 package guru.nidi.jenkins.remote
 
-data class Build(val actions: List<Map<String, Any>>?, val artifacts: List<Artifact>?, val building: Boolean?,
+data class Build(val actions: List<Map<String, Any>>?, val artifacts: List<Artifact>?, val building: Boolean,
                  val description: String?, val displayName: String?, val duration: Int?,
-                 val estimatedDuration: Int?, val executor: String?, val fullDisplayName: String?,
+                 val estimatedDuration: Int?, val executor: Any?, val fullDisplayName: String?,
                  val id: String, val keepLog: Boolean?, val number: Int, val queueId: Int?,
                  val result: String?, val timestamp: Long?, val url: String?, val builtOn: String?,
                  val changeSet: ChangeSet?, val changeSets: List<ChangeSet>?, val culprits: List<Person>?,

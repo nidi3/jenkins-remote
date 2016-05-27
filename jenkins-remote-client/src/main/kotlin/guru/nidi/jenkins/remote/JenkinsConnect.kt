@@ -34,10 +34,10 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLHandshakeException
 
 class JenkinsConnect(server: String, port: Int = 0,
-                     username: String? = null, apiToken: String? = null,
-                     verifyHostname: Boolean = true, verifyCertificate: Boolean = true) : Closeable {
+                     val username: String? = null, val apiToken: String? = null,
+                     val verifyHostname: Boolean = true, val verifyCertificate: Boolean = true) : Closeable {
 
-    private val server: String
+    val server: String
     private val client: CloseableHttpClient
     private val context: HttpClientContext?
 
