@@ -27,6 +27,7 @@ import java.util.*
 import kotlin.concurrent.scheduleAtFixedRate
 
 class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dataDir: File,
+                     val maxProjects: Int,
                      val changeListener: ((BuildState, BuildState) -> Unit) = { a, b -> }) {
     private val log = LoggerFactory.getLogger(JenkinsMonitor::class.java)
     private val mapper = ObjectMapper().registerModule(KotlinModule())
@@ -59,11 +60,13 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
     fun getState(): Map<String, BuildState> = state
 
     private fun askJenkins() {
-        fun askJobs(parent: String, jobContainer: JobContainer) {
+        fun askJobs(parent: String, jobContainer: JobContainer): Int {
+            log.info("Asking ${jobContainer.jobs?.size ?: 0} of ${client.connect.server} $parent")
+            var projs = 0
             if (jobContainer.jobs != null) {
                 for (jobOverview in jobContainer.jobs!!) {
                     val job = jobOverview.load(client)
-                    askJobs(parent + "/" + jobOverview.name, job)
+                    projs += askJobs(parent + "/" + jobOverview.name, job)
                     val lastBuild = job.lastBuild
                     val key = parent + "/" + job.name
                     if (lastBuild != null) {
@@ -78,12 +81,20 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
                                 }
                             }
                             state.put(key, newState)
+                            projs++
                         }
                     } else {
                         state.remove(key)
+                        projs--
+                    }
+
+                    if (maxProjects > 0 && projs > maxProjects) {
+                        log.info("Too many projects")
+                        return projs
                     }
                 }
             }
+            return projs
         }
 
         val overview = client.overview()

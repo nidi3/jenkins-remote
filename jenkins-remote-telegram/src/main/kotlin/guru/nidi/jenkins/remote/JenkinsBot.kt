@@ -18,6 +18,7 @@ package guru.nidi.jenkins.remote
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import org.slf4j.LoggerFactory
 import org.telegram.telegrambots.TelegramBotsApi
 import org.telegram.telegrambots.api.methods.send.SendMessage
 import org.telegram.telegrambots.api.objects.Update
@@ -26,15 +27,20 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
+import java.util.*
+import java.util.regex.Pattern
 
 data class BotState(val monitors: MutableMap<String, JenkinsConnect>, val chats: MutableMap<Long, Chat>)
-data class Chat(val monitors: MutableMap<String, Boolean>, var running: Boolean)
+data class Chat(val monitors: LinkedHashMap<String, Boolean>, var running: Boolean)
 
 class JenkinsBot(val username: String, val token: String) : TelegramLongPollingBot() {
+    private val log = LoggerFactory.getLogger(JenkinsBot::class.java)
     private val mapper: ObjectMapper
     val dataDir = File(System.getenv("DATA_DIR") ?: ".")
     val state: BotState
     val monitors = mutableMapOf<String, JenkinsMonitor>()
+    val readInterval = 15 * 60
+    val maxProjects = 50
 
     init {
         dataDir.mkdirs()
@@ -47,7 +53,7 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
     }
 
     private fun startMonitor(connect: JenkinsConnect) {
-        val instance = JenkinsMonitor(JenkinsClient(connect), 15 * 60, dataDir) { before, after ->
+        val instance = JenkinsMonitor(JenkinsClient(connect), readInterval, dataDir, maxProjects) { before, after ->
             for (chat in state.chats) {
                 if (chat.value.running && chat.value.monitors.getOrElse(connect.server, { false })) {
                     sendMsg(chat.key, statusOf(after))
@@ -102,7 +108,7 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
 
     override fun onUpdateReceived(update: Update) {
         val msg = update.message
-        val parts = msg.text.split(" ")
+        val parts = msg.text.split(Pattern.compile("\\s+|_"))
 
         fun send(text: String) = sendMsg(msg.chatId, text)
 
@@ -110,13 +116,17 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
             if (chat == null) {
                 send("No servers configured. Use /start <url> <username> <token>")
             } else {
+                var i = 0
                 for (server in chat.monitors) {
                     if (server.value) {
-                        send("${server.key}:\n" +
-                                monitors[server.key]!!.getState().values
-                                        .sortedBy { s -> s.color + s.name }
+                        i++
+                        val states = monitors[server.key]!!.getState().values
+                        send("$i. ${server.key}:\n" +
+                                states.sortedBy { s -> s.color + s.name }
                                         .map { s -> statusOf(s) }
-                                        .joinToString("\n"))
+                                        .joinToString("\n") +
+                                if (states.size >= maxProjects) "\n...and more" else ""
+                        )
                     }
                 }
             }
@@ -153,39 +163,65 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
                 try {
                     startMonitor(connect)
                     state.monitors.put(connect.server, connect)
-                    val newChat = state.chats.getOrPut(msg.chatId, { Chat(mutableMapOf(), true) })
+                    val newChat = state.chats.getOrPut(msg.chatId, { Chat(LinkedHashMap(), true) })
                     newChat.monitors.put(connect.server, true)
                     newChat.running = true
                     saveState(state)
                     status(newChat)
                 } catch(e: Exception) {
-                    send("Could not connect to server: " + e.message)
+                    send("Sorry, there was a problem trying to get project status.")
+                    log.error("Problem during start", e)
                 }
             }
         }
 
         fun end(chat: Chat?) {
-            val server = parts.getOrNull(1)
-            if (server == null) {
-                send("No server given. Use /end <url>")
-            } else if (chat == null) {
-                send("No servers configured.")
-            } else if (!chat.monitors.contains(server)) {
-                send("Not monitoring $server")
-            } else {
-                chat.monitors.put(server, false)
-                saveState(state)
-                send("Monitoring for $server ended.")
+            val serverParam = parts.getOrNull(1)
+            if (chat == null) {
+                return send("No servers configured.")
             }
+            if (serverParam == null) {
+                var i = 0
+                var s = ""
+                for (server in chat.monitors) {
+                    if (server.value) {
+                        i++
+                        s += "/end_$i to end ${server.key}\n"
+                    }
+                }
+                return send(s)
+            }
+            val serverKey: String
+            try {
+                val serverI = serverParam.toInt()
+                if (serverI < 1 || serverI > chat.monitors.size) {
+                    return send("No server $serverI")
+                }
+                val iter = chat.monitors.iterator()
+                for (i in 0..serverI - 2) iter.next()
+                serverKey = iter.next().key
+            } catch(e: NumberFormatException) {
+                serverKey = serverParam
+            }
+
+            if (!chat.monitors.contains(serverKey)) {
+                return send("Not monitoring $serverKey")
+            }
+            chat.monitors.put(serverKey, false)
+            saveState(state)
+            send("Monitoring for $serverKey ended.")
         }
 
-        fun unknown() {
-            send("Unknown command ${msg.text}\n" +
-                    "/status - show status of all projects\n" +
-                    "/start - start the monitoring of a server\n" +
-                    "/end - end the monitoring of a server\n" +
-                    "/stop - stop the bot\n" +
-                    "/go - start the bot")
+        fun info(prefix: String) {
+            send("""
+$prefix
+/info - Show this info
+/status - Show that status of all projects
+/start - Start monitoring a server
+/end - End monitoring a server
+/stop - Stop the bot
+/go - Start the bot
+""")
         }
 
         val chat = state.chats[msg.chatId]
@@ -196,7 +232,8 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
                 "end" -> end(chat)
                 "stop" -> stop(chat)
                 "go" -> go(chat)
-                else -> unknown()
+                "info" -> info("")
+                else -> info("Unknown command ${msg.text}")
             }
         }
     }
