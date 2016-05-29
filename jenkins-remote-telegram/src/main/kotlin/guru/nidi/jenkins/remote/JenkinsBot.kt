@@ -226,7 +226,9 @@ $prefix
 
         val chat = state.chats[msg.chatId]
         if (msg.text.startsWith("/")) {
-            when (parts[0].substring(1)) {
+            val atPos = parts[0].indexOf('@')
+            val command = if (atPos < 0) parts[0].substring(1) else parts[0].substring(1, atPos)
+            when (command) {
                 "status" -> status(chat)
                 "start" -> start()
                 "end" -> end(chat)
