@@ -53,10 +53,14 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
     }
 
     private fun startMonitor(connect: JenkinsConnect) {
-        val instance = JenkinsMonitor(JenkinsClient(connect), readInterval, dataDir, maxProjects) { before, after ->
-            for (chat in state.chats) {
-                if (chat.value.running && chat.value.monitors.getOrElse(connect.server, { false })) {
-                    sendMsg(chat.key, statusOf(after))
+        val instance = JenkinsMonitor(JenkinsClient(connect), readInterval, dataDir, maxProjects) { changes ->
+            if (!changes.isEmpty()) {
+                for (chat in state.chats) {
+                    if (chat.value.running && chat.value.monitors.getOrElse(connect.server, { false })) {
+                        sendMsg(chat.key, "${connect.server}:\n" +
+                                changes.map { c -> statusOf(c.second) }
+                                        .joinToString("\n"))
+                    }
                 }
             }
         }
@@ -67,7 +71,9 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
     private fun dataFile(): File {
         val file = File(dataDir, "jenkins-bot.json")
         if (!file.exists()) {
-            OutputStreamWriter(FileOutputStream(file)).use() { out -> out.write("""{"monitors":{},"chats":{}}""") }
+            OutputStreamWriter(FileOutputStream(file)).use() { out ->
+                out.write("""{"monitors":{},"chats":{}}""")
+            }
         }
         return file
     }

@@ -28,7 +28,7 @@ import kotlin.concurrent.scheduleAtFixedRate
 
 class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dataDir: File,
                      val maxProjects: Int,
-                     val changeListener: ((BuildState, BuildState) -> Unit) = { a, b -> }) {
+                     val changeListener: ((List<Pair<BuildState, BuildState>>) -> Unit) = {}) {
     private val log = LoggerFactory.getLogger(JenkinsMonitor::class.java)
     private val mapper = ObjectMapper().registerModule(KotlinModule())
     private val state: MutableMap<String, BuildState>
@@ -60,6 +60,8 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
     fun getState(): Map<String, BuildState> = state
 
     private fun askJenkins() {
+        val changes = mutableListOf<Pair<BuildState, BuildState>>()
+
         fun askJobs(parent: String, jobContainer: JobContainer): Int {
             log.info("Asking ${jobContainer.jobs?.size ?: 0} of ${client.connect.server} $parent")
             var projs = 0
@@ -77,7 +79,7 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
                             val lastState = state.get(key)
                             if (lastState != null) {
                                 if (lastState.color != newState.color) {
-                                    changeListener(lastState, newState)
+                                    changes.add(Pair(lastState, newState))
                                 }
                             }
                             state.put(key, newState)
@@ -100,6 +102,7 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
         val overview = client.overview()
         askJobs("", overview)
         saveState(state)
+        changeListener.invoke(changes)
     }
 
     private fun dataFile(): File {
