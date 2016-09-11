@@ -27,7 +27,8 @@ import java.util.*
 import kotlin.concurrent.scheduleAtFixedRate
 
 class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dataDir: File,
-                     val maxProjects: Int,
+                     loadState: Boolean, val maxProjects: Int,
+                     val filterPrefix: String? = null,
                      val changeListener: ((List<Pair<BuildState, BuildState>>) -> Unit) = {}) {
     private val log = LoggerFactory.getLogger(JenkinsMonitor::class.java)
     private val mapper = ObjectMapper().registerModule(KotlinModule())
@@ -36,7 +37,7 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
 
     init {
         dataDir.mkdirs()
-        state = loadState()
+        state = if (loadState) loadState() else HashMap()
     }
 
     fun start() {
@@ -67,32 +68,34 @@ class JenkinsMonitor(val client: JenkinsClient, val refreshSeconds: Int, val dat
             var projs = 0
             if (jobContainer.jobs != null) {
                 for (jobOverview in jobContainer.jobs!!) {
-                    val job = jobOverview.load(client)
-                    projs += askJobs(parent + "/" + jobOverview.name, job)
-                    val lastBuild = job.lastBuild
-                    val key = parent + "/" + job.name
-                    if (lastBuild != null) {
-                        val build = lastBuild.load(client)
-                        if (!build.building) {
-                            val newState = BuildState(key, build.number, build.result ?: "unknown",
-                                    (build.culprits ?: emptyList<Person>()).map { it.fullName ?: "unknown" })
-                            val lastState = state.get(key)
-                            if (lastState != null) {
-                                if (lastState.color != newState.color) {
-                                    changes.add(Pair(lastState, newState))
+                    val key = (if (parent.length == 0) "" else "/") + jobOverview.name
+                    if (filterPrefix == null || key.startsWith(filterPrefix)) {
+                        val job = jobOverview.load(client)
+                        projs += askJobs(key, job)
+                        val lastBuild = job.lastBuild
+                        if (lastBuild != null) {
+                            val build = lastBuild.load(client)
+                            if (!build.building) {
+                                val newState = BuildState(key, build.number, build.result ?: "unknown",
+                                        (build.culprits ?: emptyList<Person>()).map { it.fullName ?: "unknown" })
+                                val lastState = state.get(key)
+                                if (lastState != null) {
+                                    if (lastState.color != newState.color) {
+                                        changes.add(Pair(lastState, newState))
+                                    }
                                 }
+                                state.put(key, newState)
+                                projs++
                             }
-                            state.put(key, newState)
-                            projs++
+                        } else {
+                            state.remove(key)
+                            projs--
                         }
-                    } else {
-                        state.remove(key)
-                        projs--
-                    }
 
-                    if (maxProjects > 0 && projs > maxProjects) {
-                        log.info("Too many projects")
-                        return projs
+                        if (maxProjects > 0 && projs > maxProjects) {
+                            log.info("Too many projects")
+                            return projs
+                        }
                     }
                 }
             }

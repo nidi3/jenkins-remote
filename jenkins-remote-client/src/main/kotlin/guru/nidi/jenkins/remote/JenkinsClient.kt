@@ -15,6 +15,7 @@
  */
 package guru.nidi.jenkins.remote
 
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 
@@ -23,7 +24,7 @@ class JenkinsClient(val connect: JenkinsConnect) {
 
     init {
         mapper = ObjectMapper().registerModule(KotlinModule())
-//        mapper.setConfig(mapper.deserializationConfig.without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES))
+        mapper.setConfig(mapper.deserializationConfig.without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES))
     }
 
 

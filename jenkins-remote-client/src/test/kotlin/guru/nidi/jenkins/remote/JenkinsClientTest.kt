@@ -67,8 +67,8 @@ class JenkinsClientTest {
 
     @Test
     fun build() {
-        val build = jenkins.build(4, "Core", "jenkins_2.0")
-        assertEquals("4", build.id)
+        val build = jenkins.build(200, "Core", "jenkins_master")
+        assertEquals("200", build.id)
     }
 
     @Test

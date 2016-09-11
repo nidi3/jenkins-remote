@@ -15,79 +15,48 @@
  */
 package guru.nidi.jenkins.remote
 
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.slf4j.LoggerFactory
 import org.telegram.telegrambots.TelegramBotsApi
 import org.telegram.telegrambots.api.methods.send.SendMessage
 import org.telegram.telegrambots.api.objects.Update
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.OutputStreamWriter
 import java.util.*
 import java.util.regex.Pattern
 
-data class BotState(val monitors: MutableMap<String, JenkinsConnect>, val chats: MutableMap<Long, Chat>)
-data class Chat(val monitors: LinkedHashMap<String, Boolean>, var running: Boolean)
 
 class JenkinsBot(val username: String, val token: String) : TelegramLongPollingBot() {
     private val log = LoggerFactory.getLogger(JenkinsBot::class.java)
-    private val mapper: ObjectMapper
-    val dataDir = File(System.getenv("DATA_DIR") ?: ".")
-    val state: BotState
     val monitors = mutableMapOf<String, JenkinsMonitor>()
+    val dataDir = File(System.getenv("DATA_DIR") ?: ".")
+    val stateMgr: BotStateManager
     val readInterval = 15 * 60
     val maxProjects = 50
 
     init {
-        dataDir.mkdirs()
-        mapper = ObjectMapper().registerModule(KotlinModule())
-        mapper.setConfig(mapper.deserializationConfig.without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES))
-        state = loadState()
-        for (monitor in state.monitors) {
-            startMonitor(monitor.value)
+        stateMgr = BotStateManager(File(dataDir, "jenkins-bot.json"))
+        for (monitor in stateMgr.state.monitors) {
+            startMonitor(monitor.value, true)
         }
     }
 
-    private fun startMonitor(connect: JenkinsConnect) {
-        val instance = JenkinsMonitor(JenkinsClient(connect), readInterval, dataDir, maxProjects) { changes ->
+    private fun startMonitor(config: MonitorConfig, load: Boolean) {
+        val instance = JenkinsMonitor(JenkinsClient(config.connect), readInterval, dataDir, maxProjects, config.filter) { changes ->
             if (!changes.isEmpty()) {
-                for (chat in state.chats) {
-                    if (chat.value.running && chat.value.monitors.getOrElse(connect.server, { false })) {
-                        sendMsg(chat.key, "${connect.server}:\n" +
+                for (chat in stateMgr.state.chats) {
+                    if (chat.value.running && chat.value.monitors.getOrElse(config.connect.server, { false })) {
+                        sendMsg(chat.key, "${config.connect.server}:\n" +
                                 changes.map { c -> statusOf(c.second) }
                                         .joinToString("\n"))
                     }
                 }
             }
         }
+        if (load) {
+            instance.loadState()
+        }
         instance.start()
-        monitors.put(connect.server, instance)
-    }
-
-    private fun dataFile(): File {
-        val file = File(dataDir, "jenkins-bot.json")
-        if (!file.exists()) {
-            OutputStreamWriter(FileOutputStream(file)).use() { out ->
-                out.write("""{"monitors":{},"chats":{}}""")
-            }
-        }
-        return file
-    }
-
-    private fun loadState(): BotState {
-        return FileInputStream(dataFile()).use { inp ->
-            mapper.readValue(inp, BotState::class.java)
-        }
-    }
-
-    private fun saveState(state: BotState) {
-        return FileOutputStream(dataFile()).use { out ->
-            mapper.writeValue(out, state)
-        }
+        monitors.put(config.connect.server, instance)
     }
 
     fun statusOf(s: BuildState): String {
@@ -98,7 +67,7 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
             else -> "?"
         }
 
-        val name = s.name.substring(1)
+        val name = s.name
         val symbol = symbolOf(s.color)
         val culprits = if (s.culprits.isEmpty()) ""
         else s.culprits.joinToString(prefix = "(", postfix = ")")
@@ -118,10 +87,16 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
 
         fun send(text: String) = sendMsg(msg.chatId, text)
 
-        fun status(chat: Chat?) {
+        fun withChat(chat: Chat?, action: (Chat) -> Unit) {
             if (chat == null) {
-                send("No servers configured. Use /start <url> <username> <token>")
+                send("No servers configured. Use /start <url>?<filter> <username> <token>")
             } else {
+                action(chat)
+            }
+        }
+
+        fun status(chat: Chat?) {
+            withChat(chat) { chat ->
                 var i = 0
                 for (server in chat.monitors) {
                     if (server.value) {
@@ -139,40 +114,40 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
         }
 
         fun stop(chat: Chat?) {
-            if (chat == null) {
-                send("No servers configured. Use /start <url> <username> <token>")
-            } else {
+            withChat(chat) { chat ->
                 chat.running = false
-                saveState(state)
+                stateMgr.save()
                 send("Bot stopped.")
             }
         }
 
         fun go(chat: Chat?) {
-            if (chat == null) {
-                send("No servers configured. Use /start <url> <username> <token>")
-            } else {
+            withChat(chat) { chat ->
                 chat.running = true
-                saveState(state)
+                stateMgr.save()
                 send("Bot started.")
             }
         }
 
         fun start() {
-            val server = parts.getOrNull(1)
+            val url = parts.getOrNull(1)
             val username = parts.getOrNull(2)
             val token = parts.getOrNull(3)
-            if (server == null) {
-                send("No server given. Use /start <url> <username> <token>")
+            if (url == null) {
+                send("No server given. Use /start <url>?<filter> <username> <token>")
             } else {
+                val qpos = url.indexOf('?')
+                val server = if (qpos < 0) url else url.substring(0, qpos)
+                val filter = if (qpos < 0) null else url.substring(qpos + 1)
                 val connect = JenkinsConnect(server, username = username, apiToken = token, verifyCertificate = false)
+                val config = MonitorConfig(connect, filter)
                 try {
-                    startMonitor(connect)
-                    state.monitors.put(connect.server, connect)
-                    val newChat = state.chats.getOrPut(msg.chatId, { Chat(LinkedHashMap(), true) })
-                    newChat.monitors.put(connect.server, true)
+                    startMonitor(config, false)
+                    stateMgr.state.monitors.put(config.connect.server, config)
+                    val newChat = stateMgr.state.chats.getOrPut(msg.chatId, { Chat(LinkedHashMap(), true) })
+                    newChat.monitors.put(config.connect.server, true)
                     newChat.running = true
-                    saveState(state)
+                    stateMgr.save()
                     status(newChat)
                 } catch(e: Exception) {
                     send("Sorry, there was a problem trying to get project status.")
@@ -214,7 +189,7 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
                 return send("Not monitoring $serverKey")
             }
             chat.monitors.put(serverKey, false)
-            saveState(state)
+            stateMgr.save()
             send("Monitoring for $serverKey ended.")
         }
 
@@ -230,7 +205,7 @@ $prefix
 """)
         }
 
-        val chat = state.chats[msg.chatId]
+        val chat = stateMgr.state.chats[msg.chatId]
         if (msg.text.startsWith("/")) {
             val atPos = parts[0].indexOf('@')
             val command = if (atPos < 0) parts[0].substring(1) else parts[0].substring(1, atPos)
