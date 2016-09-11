@@ -41,7 +41,7 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
     }
 
     private fun startMonitor(config: MonitorConfig, load: Boolean) {
-        val instance = JenkinsMonitor(JenkinsClient(config.connect), readInterval, dataDir, maxProjects, config.filter) { changes ->
+        val instance = JenkinsMonitor(JenkinsClient(config.connect), readInterval, dataDir, load, maxProjects, config.filter) { changes ->
             if (!changes.isEmpty()) {
                 for (chat in stateMgr.state.chats) {
                     if (chat.value.running && chat.value.monitors.getOrElse(config.connect.server, { false })) {
@@ -51,9 +51,6 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
                     }
                 }
             }
-        }
-        if (load) {
-            instance.loadState()
         }
         instance.start()
         monitors.put(config.connect.server, instance)
