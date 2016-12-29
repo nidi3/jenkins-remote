@@ -60,15 +60,15 @@ class JenkinsClientTest {
         val job = jenkins.job("Core", "pom")
         assertEquals("pom", job.name)
         assertNotNull(job.displayName)
-        assertFalse(job.healthReport.isEmpty())
-        assertNull(job.jobs)
-        assertNull(job.views)
+        assertTrue(job.healthReport.isEmpty())
+        assertFalse(job.jobs!!.isEmpty())
+        assertFalse(job.views!!.isEmpty())
     }
 
     @Test
     fun build() {
-        val build = jenkins.build(200, "Core", "jenkins_master")
-        assertEquals("200", build.id)
+        val build = jenkins.build(170, "Core", "jenkins", "master")
+        assertEquals("170", build.id)
     }
 
     @Test
@@ -85,14 +85,14 @@ class JenkinsClientTest {
 
     @Test
     fun navigateBuild() {
-        val job = jenkins.job("Core", "pom")
+        val job = jenkins.job("Core", "jenkins", "master")
         val build = job.builds!![0].load(jenkins)
         assertNotNull(build.id)
     }
 
     @Test
     fun navigateModule() {
-        val job = overview.jobs.find{it.name=="Abdera-trunk"}!!.load(apache)
+        val job = overview.jobs.find { it.name == "Abdera-trunk" }!!.load(apache)
         val module = job.modules!![0].load(jenkins)
         assertNotNull(module.name)
     }
