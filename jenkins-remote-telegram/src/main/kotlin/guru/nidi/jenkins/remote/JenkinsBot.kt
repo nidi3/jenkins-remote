@@ -35,17 +35,17 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
 
     init {
         stateMgr = BotStateManager(File(dataDir, "jenkins-bot.json"))
-        for (monitor in stateMgr.state.monitors) {
-            startMonitor(monitor.value, true)
+        for ((key, value) in stateMgr.state.monitors) {
+            startMonitor(value, true)
         }
     }
 
     private fun startMonitor(config: MonitorConfig, load: Boolean) {
         val instance = JenkinsMonitor(JenkinsClient(config.connect), readInterval, dataDir, load, maxProjects, config.filter) { changes ->
             if (!changes.isEmpty()) {
-                for (chat in stateMgr.state.chats) {
-                    if (chat.value.running && chat.value.monitors.getOrElse(config.connect.server, { false })) {
-                        sendMsg(chat.key, "${config.connect.server}:\n" +
+                for ((key, value) in stateMgr.state.chats) {
+                    if (value.running && value.monitors.getOrElse(config.connect.server, { false })) {
+                        sendMsg(key, "${config.connect.server}:\n" +
                                 changes.map { c -> statusOf(c.second) }
                                         .joinToString("\n"))
                     }
@@ -95,11 +95,11 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
         fun status(chat: Chat?) {
             withChat(chat) { chat ->
                 var i = 0
-                for (server in chat.monitors) {
-                    if (server.value) {
+                for ((key, value) in chat.monitors) {
+                    if (value) {
                         i++
-                        val states = monitors[server.key]!!.getState().values
-                        send("$i. ${server.key}:\n" +
+                        val states = monitors[key]!!.getState().values
+                        send("$i. $key:\n" +
                                 states.sortedBy { s -> s.color + s.name }
                                         .map { s -> statusOf(s) }
                                         .joinToString("\n") +
@@ -153,6 +153,21 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
             }
         }
 
+        fun extractServerKey(monitors: Map<String, Boolean>, serverParam: String): String? {
+            try {
+                val serverI = serverParam.toInt()
+                if (serverI < 1 || serverI > monitors.size) {
+                    send("No server $serverI")
+                    return null
+                }
+                val iter = monitors.iterator()
+                for (i in 0..serverI - 2) iter.next()
+                return iter.next().key
+            } catch(e: NumberFormatException) {
+                return serverParam
+            }
+        }
+
         fun end(chat: Chat?) {
             val serverParam = parts.getOrNull(1)
             if (chat == null) {
@@ -161,33 +176,22 @@ class JenkinsBot(val username: String, val token: String) : TelegramLongPollingB
             if (serverParam == null) {
                 var i = 0
                 var s = ""
-                for (server in chat.monitors) {
-                    if (server.value) {
+                for ((key, value) in chat.monitors) {
+                    if (value) {
                         i++
-                        s += "/end_$i to end ${server.key}\n"
+                        s += "/end_$i to end $key\n"
                     }
                 }
                 return send(s)
             }
-            val serverKey: String
-            try {
-                val serverI = serverParam.toInt()
-                if (serverI < 1 || serverI > chat.monitors.size) {
-                    return send("No server $serverI")
+            extractServerKey(chat.monitors, serverParam)?.let { serverKey ->
+                if (!chat.monitors.contains(serverKey)) {
+                    return send("Not monitoring $serverKey")
                 }
-                val iter = chat.monitors.iterator()
-                for (i in 0..serverI - 2) iter.next()
-                serverKey = iter.next().key
-            } catch(e: NumberFormatException) {
-                serverKey = serverParam
+                chat.monitors.put(serverKey, false)
+                stateMgr.save()
+                send("Monitoring for $serverKey ended.")
             }
-
-            if (!chat.monitors.contains(serverKey)) {
-                return send("Not monitoring $serverKey")
-            }
-            chat.monitors.put(serverKey, false)
-            stateMgr.save()
-            send("Monitoring for $serverKey ended.")
         }
 
         fun info(prefix: String) {
