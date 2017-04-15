@@ -28,7 +28,6 @@ import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.client.CloseableHttpClient
 import org.apache.http.impl.client.HttpClients
 import org.apache.http.ssl.SSLContexts
-import sun.security.validator.ValidatorException
 import java.io.Closeable
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLHandshakeException
@@ -86,7 +85,7 @@ class JenkinsConnect(server: String, port: Int = 0,
                 return consumer(response)
             }
         } catch(e: SSLHandshakeException) {
-            if (e.cause is ValidatorException) {
+            if (e.cause?.javaClass.toString().endsWith("ValidatorException")) {
                 throw JenkinsException("Java does not recognize the HTTPS certificate. Either\n" +
                         "- Import it from the server into java's key store or\n" +
                         "- Set 'verifyCertificate = false' in the constructor.", e)
